@@ -25,31 +25,12 @@
 
 \section*{Problem 1}
 
-Proof that concurrency is transitive:
-
-\begin{align*}
-& ( A\; \lVert\; B ) \land ( B\; \lVert\; C )
-\\ \equiv \quad & \qquad \{\ \textrm{Definition of concurrency twice}\ \} \\
-& ((\neg (A \rightarrow B) \land \neg (B \rightarrow A)) \land ((\neg (B \rightarrow C) \land \neg (C \rightarrow B))
-\\ \equiv \quad & \qquad \{\ \textrm{De Morgan's law twice}\ \} \\
-& \neg( (A \rightarrow B) \lor (B \rightarrow A)) \land \neg( (B \rightarrow C) \lor (C \rightarrow B))
-\\ \equiv \quad & \qquad \{\ \textrm{De Morgan's law once}\ \} \\
-& \neg ( (A \rightarrow B) \lor (B \rightarrow A) \lor (B \rightarrow C) \lor (C \rightarrow B) )
-\\ \equiv \quad & \qquad \{\ \textrm{Definition of $\rightarrow$ 4 times}\ \} \\
-& \neg ( (\neg A \lor B) \lor (\neg B \lor A) \lor (\neg B \lor C) \lor (\neg C \lor B) )
-\\ \equiv \quad & \qquad \{\ \textrm{$\lor$ is associative and commutative}\ \} \\
-& \neg ( \neg A \lor C \lor \neg C \lor A \lor B \lor \neg B \lor \neg B \lor B )
-\\ \Rightarrow \quad & \qquad \{\ \textrm{$B \lor \neg B \equiv true$ and $true$ is the identity of $\lor$}\ \} \\
-& \neg (\neg A \lor C \lor \neg C \lor A )
-\\ \equiv \quad & \qquad \{\ \textrm{Definition of $\rightarrow$ 2 times}\ \} \\
-& \neg (( A \rightarrow C ) \lor ( C \rightarrow A ))
-\\ \equiv \quad & \qquad \{\ \textrm{De Morgan's law once}\ \} \\
-& \neg ( A \rightarrow C ) \land \neg ( C \rightarrow A )
-\\ \equiv \quad & \qquad \{\ \textrm{Definition of concurrency once}\ \} \\
-& ( A\; \lVert\; C )
-\end{align*}
-
-\pagebreak
+Concurrency is not transitive. Here is a counterexample. Suppose $A, B, C$ are
+events on the timelines of processes $P, Q, R,$ respectively. $P$ sends a message to $R$ after event
+$A$ and the message is received before event $C$. So there is a path from $A$ to $C$. Event $B$ is the
+beginning local event on process $Q$; at this point $Q$ has not sent or received messages from
+any agent. So, there is no path to or from event $B$. So $B$ is concurrent with $A$ and with $C$,
+while $A$ and $C$ are clearly not concurrent.
 
 \section*{Problem 2}
 
@@ -67,19 +48,14 @@ Denote the point in time when the OS observes $terminated = true$ as $T_0$. By d
 
 By the two points above, the algorithm is correct.
 
- \paragraph{b)} Note that the total number of messages sent or received by an agent cannot be negative, and cannot decrease (since it's impossible to unsend/unreceive a message in our model). Note also that in our model the messages can't appear out of nowhere, so for agent to receive a message means that some other agent had to send it.
- 
-We know that each agent increments the number of sent messages by one when it sends a message, and increments the number of received messages by one when it receives a message. By the point above, it should be clear that for an agent to be able to increment their received messages counter, some other agent must have incremented their sent messages counter. If you take into account the fact that agents can go idle at any arbitrary point in time and the fact that messages are not necessarily delivered instantly (i.e. there might be messages in flight when an agent sends a message to the OS), it should be clear that $\sum\limits_{r} r.count\_received \leq \sum\limits_{r} r.count\_sent$. Moreover, $\sum\limits_{r} r.count\_received \leq \sum\limits_{r} r.count\_sent$ is invariant.
-
-We also know that each message eventually gets delivered, so eventually each increment to $count\_sent$ gets balanced out by an increment to $count\_received$. Now, assume that OS has received at least one message from each agent and sees (for the first time) that the following statement holds:
+ \paragraph{b)} This algorithm is wrong, and here is a simple counterexample. Suppose $D$ has two agents, $A$ and $B$, with two directed channels between them. Initially, both $A$ and $B$ are active and the channels are empty. Agent $B$ goes idle, and sends $(B, 0, 0)$ to the OS. Agent $A$ sends a message to $B$, which activates B again, and make it send another message to A. After receiving the message, A goes idle, and sends $(A, 1, 1)$ to the OS. At this point, the OS has received one message from each agent, and further
 
 \[
-\sum\limits_{r} r.count\_received = \sum\limits_{r} r.count\_sent
+\sum\limits_{r} r.count\_received = \sum\limits_{r} r.count\_sent = 1 + 0
 \]
 
-Clearly, if this is the first time this statement holds, $claim\_terminated$ must have been $false$ up until now, which implies $claim\_terminated \Rightarrow terminated$ was $true$. We know that we received at least one message from every agent, meaning that every agent has gone idle at least once. In our model, the agent can only be awoken when it receives a message - meaning that someone else had to send the message in the first place. Since we observe $\sum\limits_{r} r.count\_received = \sum\limits_{r} r.count\_sent$, we can conclude that there are no messages in transit and all agents are idle. This can be shown by contradiction - assume that there still exists an agent that is currently active. Since we know that all agents went idle at least once, they must've received a message to wake up. BUT since the agent in our assumption is still active, it did not report the amount of messages it has received, hence $\sum\limits_{r} r.count\_received$ should be strictly less than $\sum\limits_{r} r.count\_sent$, contradicting our observation. All channels should be empty too, since the counters imply that all messages that were sent were received. Hence we know that the system has terminated and will remain terminated because $\textbf{stable}(terminated)$. Now our $claim\_terminated$ will become and remain $true$ by definition of the algorithm, implying that $claim\_terminated \Rightarrow terminated$ holds after observation too. Clearly, safety property is satisfied as $claim\_terminated \Rightarrow terminated$ is invariant.
-
-We can show that the progress property is satisfied. Initially, all agents are active so the system is clearly not terminated. The system would be terminated when all agents are idle and all channels are empty, which would imply that each agent would have to transit from active to the idle state. This transition, by definition of our algorithm, would cause the agents to send OS a message with their counters. That is, when the system will terminate, OS would have received a message from every single agent. As explained above, the last agent to go idle without sending any messages would cause the statement $\sum\limits_{r} r.count\_received = \sum\limits_{r} r.count\_sent$ to become true. Above we've also shown by contradiction that these indeed would have to be the case for the last agent going idle. We have shown that when the program terminates, OS would have received at least one message from each agent and has also seen the statement $\sum\limits_{r} r.count\_received = \sum\limits_{r} r.count\_sent$ holds, hence settings $claim\_terminated$ to true. This confirms that progress property, $terminated \leadsto claim\_terminated$, also holds with this algorithm.
+As a result, the OS sets $claim\_terminated$ to $true$, but agent $B$ is still active, and
+$terminated$ is $false$. Therefore, the safety condition is violated.
 
  \paragraph{c)} \textbf{Proving invariant}: We know that $claim\_terminated$ is initially false and will remain false until OS observes all necessary properties. Denote the moment when OS sets $claim\_terminated$ to true as $T_0$. Clearly, before $T_0$ $claim\_terminated \Rightarrow terminated$ holds by definition of implication.
 
