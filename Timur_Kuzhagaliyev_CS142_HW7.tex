@@ -1,0 +1,199 @@
+\documentclass[10pt,letter]{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[makeroom]{cancel}
+\usepackage{graphicx}
+\usepackage{setspace}
+\usepackage{stmaryrd}
+\def\fatbar{\talloblong}
+\onehalfspacing
+\usepackage{fullpage}
+\newcommand{\R}{\mathbb{R}}	
+\newcommand{\inner}{\langle\cdot,\cdot\rangle}
+\newcommand{\inr}[2]{\langle #1, #2\rangle}
+\newcommand\norm[1]{\left\lVert#1\right\rVert}
+
+\graphicspath{ {images/} }
+
+\begin{document}
+
+
+\title{CS142 Homework Set \#7 Solutions}
+
+\author{Timur Kuzhagaliyev}
+
+%\date{21st November, 2017}
+ 
+\maketitle 
+
+\section*{Problem 1}
+
+Intuitively, the algorithm should work because the logic described in the question is equivalent to running two instances of the 1-bit algorithm simultaneously and in perfect sync, so the messages could be superimposed.
+
+The variables for officers remain the same as in proof used in class, except now $commit[u, r]$, $confirm[u, x, r]$ and $confirmationCount[u,r]$ operate on vectors of size 2, updating relevant vectors component-wise. Initially, the values for each commander are $(false, false)$, $(false, false)$ and $(0, 0)$ respectively, and general makes the decision to commit following the logic described in class, but now applied to each bit separately.
+
+The officers now can also send out multiple commit messages, one for committing each bit while the other bit is uncommitted. Alternatively, if the officer commits both bits at the same time, a single commit message is sent. If an officer receives multiple commit messages from the some other officer, it takes the a logical OR of all messages.
+
+I will now show that all of the lemmas and theorems defined for the 1-bit version of the algorithm hold for the 2 bit version.
+
+\begin{enumerate}
+\item{Lemma 1: $confirm[u,v,r] = commit[v,r - 1]$.}
+
+\textbf{Proof:} If a non-faulty general $v$ commits one (or both) of its bits in round $r - 1$, it will send out a $commitMessage[v]$ to all other officers, containing the values for each bit. This means that all non-faulty generals $u$ would have received $commitMessage[v]$ by round $r$, and hence $confirm[u,v,r]$ holds (for the relevant component).
+\item{Lemma 2: $confirm[u,x,r-1] \Rightarrow confirm[v, x, r]$ where $u, v$ are non-faulty officers.}
+
+\textbf{Proof:} When $u$ received a 2-component $commitMessage[x]$ in $r - 1$, it has relayed it to all officers including $v$. In round $r$, $v$ has received $commitMessage[x]$ so $confirm[v, x, r]$ holds (for the relevant components).
+\item{Theorem 1: If a non-faulty officer commits one (or both) of the bits in round r, then all non-faulty officers commit the same bits by round r + 1, where the comparison is defined component-wise}
+
+\textbf{Proof:} We know that $commit[u, r] = commit[u, r - 1] \lor ((confirmationCount[u, r] \geq r) \land confirm[u,g,r])$. Suppose $u$ commits one (or both) bits for the first time in $r$, so the first part of the condition must be false. In this case, for $u$ to commit some bits it must have received at least $r$ commit messages from other officers and a commit message from the general for the same bits. Now, $u$ will relay all of the commit messages it has (including the general's and its own commit) to other generals.
+
+This means that by round $r+1$, all non-faulty officers $v$ would have received $r+1$ commit messages and a commit message from the general for some bits, so $confirmationCount[v, r] \geq r) \land confirm[v,g,r]$ would hold and they would commit the same bits.
+
+\item{Theorem 2: If no non-faulty officers commit one (or both) of their bits in the first t rounds, then no non-faulty officer will commit the same bits in later rounds, where $t$ is the maximum number of faulty generals.}
+
+\textbf{Proof:} We know that $commit[u, r] = commit[u, r - 1] \lor ((confirmationCount[u, r] \geq r) \land confirm[u,g,r])$, similarly: $commit[u, t+1] = commit[u, t] \lor ((confirmationCount[u, t+1] \geq t + 1) \land confirm[u,g,t+1])$, for each component of the vector separately. By assumption, $commit[u, t]$ does not hold for the relevant bits, for all non-faulty officers $u$. This means that each non-faulty agent can have a maximum of $t$ commit messages for the relevant bit (from the faulty officers), and at round $t+1$ the condition $confirmationCount[u, t+1] \geq t + 1$ will not hold. Hence $commit[u, t+1]$ will be $false$, for round $t+1$ and all subsequent rounds (if any).
+\end{enumerate}
+
+The proofs above demonstrate that the algorithm will indeed work, much like the algorithm discussed in class.
+
+\section*{Problem 2}
+
+The algorithm would not work if forgery is allowed. The original version, which relied on the fact that forgery was disallowed, made heavy use of the fact that the message from the general could not be forged (i.e. $confirm[u,g,r]$ would always be what the general originally sent, whether the general is faulty or non-faulty). 
+
+We will exploit this fact to show how the safety property can be violated. Consider the case where the general is non-faulty and it sends out a command to retreat. Our safety property dictates that all non-faulty officers must obey this command.
+
+Now, the 2 faulty commanders can work together - they can both modify the general's message to make it look like the original command was attack, and then send out their commit messages and the forged general message to some non-faulty commanders during round 1.
+
+In round 2, these non-faulty commanders would have received at least 2 commit messages (from the faulty commanders) and the (forged) attack message from the general, hence they will commit. This violates the safety property as the non-faulty commanders disobeyed the order of the non-faulty general, and they cannot change their decision.
+
+Therefore the algorithm is not correct in the case where forger is allowed.
+
+\pagebreak
+
+\section*{Problem 3}
+
+\paragraph{a)} Types of messages used in the Paxos algorithm:
+
+\begin{enumerate}
+\item{\textbf{prepare(n)}.} This message type has a single argument $n$ which is a value in a total order. In this code $n$ is a pair $(t, id)$, where $t$ is a non-negative integer that can only increase and $id$ is the static ID for a particular agent, and the comparisons in total order are made lexicographically. To simplify the descriptions in the future I'll refer to pairs $(t, id)$ in the total order as "timestamps".
+
+Message type \textbf{prepare(n)} is sent by a proposer and is received by an acceptor.
+
+
+\item{\textbf{granted(n, latest\_accepted, latest\_accepted\_n)}.} This message type has three arguments: $n$ and $latest\_accepted$ are timestamps, $latest\_accepted$ is some value representing the proposal that was last accepted by the acceptor. If $latest\_accepted$ is not $None$, then $latest\_accepted\_n$ contains the timestamp for which the proposal was accepted. $n$ contains the value of the corresponding (successful) \textbf{prepare(n)} message.
+
+Message type \textbf{granted(n, latest\_accepted, latest\_accepted\_n)} is sent by an acceptor and is received by a proposer.
+
+
+\item{\textbf{nack\_prepare(n)}.} This message contains a single argument $n$. It is used to notify proposers that their message \textbf{prepare(n)} was not successful.
+
+Message type \textbf{nack\_prepare(n)} is sent by an acceptor and is received by a proposer.
+
+
+\item{\textbf{accept(n, proposal)}.} This message contains two arguments: $n$ is the timestamp that corresponds to the last \textbf{prepare(n)} message the proposer sent (and subsequently the returned \textbf{granted(n, ...)} message), $proposal$ is some value that the proposer wishes to propose (subject to constraints described below).
+
+Message type \textbf{accept(n, proposal)} is sent by an proposer and is received by a acceptor.
+
+
+\item{\textbf{accepted(proposal)}.} The message contains a single argument, $proposal$, which corresponds to the value that the acceptor has accepted.
+
+Message type \textbf{accepted(proposal)} is sent by an acceptor and is received by a learner.
+\end{enumerate}
+
+\pagebreak
+
+\paragraph{b)} Local variables for each type of agent in the Paxos algorithm:
+
+\begin{enumerate}
+\item{\textbf{Proposer}.} A local variable of proposer is $last\_n$, which is a timestamp. $last\_n$ is the last value of $n$ sent by this proposer in a \textbf{prepare(n)} message. The other local variable is $grantors$, which is a set of \textbf{granted(n, ...)} messages received by this proposer, used to track when the majority of acceptors are ready to accept a proposal. $grantors$ is reset to an empty set every time the proposer sends out a new \textbf{prepare(n)} message and updates $last\_n$. Initially $last\_n$ is some $None$ and $grantors$ is an empty set.
+
+\item{\textbf{Acceptor}.} Acceptors maintain three local variables. $highest\_prepare\_n$ is a timestamp corresponding to the highest value of $n$ acceptor has received through a \textbf{prepare(n)} message. $latest\_accepted$ and $latest\_accepted\_n$ correspond to the latest accepted proposal and the timestamp of that proposal respectively. Said proposal must have been received through a (successful) \textbf{accept(n, proposal)} message. Initially $highest\_prepare\_n$ is some arbitrary negative value, while $latest\_accepted$ and $latest\_accepted\_n$ are both $None$.
+
+\item{\textbf{Learner}.} Learner maintains two local variables. First variable is $learned$, which corresponds to the value of the proposal the learner has learned by receiving an \textbf{accepted(proposal)} message. The second variable is the hashmap $proposals$. The keys in this hashmap are the IDs of acceptors and the values are the proposals received from relevant agents through \textbf{accepted(proposal)} messages. Initially $learned$ is $None$ and $proposals$ is a hashmap with a value for each acceptor ID initialised to $None$.
+\end{enumerate}
+
+\pagebreak
+
+\paragraph{c)} Programs for each agent type in the Paxos algorithm written in (loose) UNITY notation can be found below. Note that in code any non-$None$ timestamp is greater than $None$. Additionally, if the message has been received by there is no action corresponding to it (e.g. the second part of guard was not satisfied), the message is ignored.
+\begin{align*}
+\textrm{\textbf{Program}} \qquad & \textrm{Proposer}
+\\
+\textrm{\textbf{var}} \qquad & id\; \textrm{:\; Unique ID of this agent}
+\\ & last\_n\; \textrm{:\; $(t, id)$}
+\\ & grantors\; \textrm{:\; set of received \textbf{granted(...)} messages}
+\\
+\textrm{\textbf{initially}} \qquad & last\_n = None
+\\
+\land\; & grantors = \varnothing
+\\
+\textrm{\textbf{actions}} \qquad &
+\end{align*}
+\begin{align*}
+\textbf{if}\quad &triggered
+\\
+\textbf{then}\quad &\textrm{Pick some $n = (t, id)$ where $t$ is higher than that in $last\_n$,}
+\\ &\textrm{send prepare(n) message to a majority set of acceptors,}
+\\ &\textrm{assign } last\_n, grantors := n, \varnothing.
+\\\\
+\textbf{if}\quad &\textrm{receive } granted(n, latest\_accepted, latest\_accepted\_n) \land n = last\_n
+\\ \textbf{then}\quad &\textrm{add the received \textbf{granted(...)} message to the $grantors$ set.}
+\\\\
+\textbf{if}\quad &\textrm{$grantors$ set contains messages from the majority of acceptors} \land \textrm{$latest\_accepted = None$ in all messages}
+\\ \textbf{then}\quad &\textrm{pick some value $proposal$ representing a desired proposal,}
+\\ &\textrm{send out \textbf{accept(last\_n, proposal)} message to acceptors appearing in $grantors$ set,}
+\\ &\textrm{assign } grantors := \varnothing.
+\\\\
+\textbf{if}\quad &\textrm{$grantors$ set contains messages from the majority of acceptors} \land \textrm{$latest\_accepted \neq None$ in some messages}
+\\ \textbf{then}\quad &\textrm{search messages in $grantors$ to find the $proposal$ corresponding to the highest $latest\_accepted\_n$,}
+\\ &\textrm{send out \textbf{accept(last\_n, proposal)} message to acceptors appearing in $grantors$ set,}
+\\ &\textrm{assign } grantors := \varnothing.
+\end{align*}
+
+\pagebreak
+
+\begin{align*}
+\textrm{\textbf{Program}} \qquad & \textrm{Acceptor}
+\\
+\textrm{\textbf{var}} \qquad & latest\_accepted\; \textrm{:\; proposal}
+\\ & highest\_prepare\_n, latest\_accepted\_n\; \textrm{:\; $(t, id)$}
+\\
+\textrm{\textbf{initially}} \qquad & highest\_prepare\_n = latest\_accepted = latest\_accepted\_n = None
+\\
+\textrm{\textbf{actions}} \qquad &
+\end{align*}
+\begin{align*}
+\textbf{if}\quad &\textrm{receive } prepare(n) \land n > highest\_prepare\_n
+\\ \textbf{then}\quad &\textrm{respond with \textbf{granted(n, latest\_accepted, latest\_accepted\_n)},}
+\\ &\textrm{assign } highest\_prepare\_n := n.
+\\\\
+\textbf{if}\quad &\textrm{receive } prepare(n) \land n \leq highest\_prepare\_n
+\\ \textbf{then}\quad &\textrm{respond with \textbf{nack\_prepare(n)}.}
+\\\\
+\textbf{if}\quad &\textrm{receive } accept(n, proposal) \land n \geq highest\_prepare\_n
+\\ \textbf{then}\quad &\textrm{send out \textbf{accepted(proposal)} to all learners,}
+\\ &\textrm{assign } latest\_accepted, latest\_accepted\_n := proposal, n.
+\end{align*}
+
+\pagebreak
+
+\begin{align*}
+\textrm{\textbf{Program}} \qquad & \textrm{Learner}
+\\
+\textrm{\textbf{var}} \qquad & learned\; \textrm{:\; proposal}
+\\ & proposals\; \textrm{:\; hashmap with acceptor IDs as keys and proposals as values}
+\\
+\textrm{\textbf{initially}} \qquad & learned = None
+\\
+\land\; & (\forall\, id : id \in \{\textrm{acceptor IDs}\} : proposals[id] = None)
+\\
+\textrm{\textbf{actions}} \qquad &
+\end{align*}
+\begin{align*}
+\textbf{if}\quad &\textrm{receive } accepted(proposal)
+\\ \textbf{then}\quad &\textrm{assign } proposals[id] := proposal, \textrm{ where $id$ is ID of the sender.}
+\\\\
+\textbf{if}\quad &\textrm{majority of values in $proposals$ are equal to some value $proposal$} \land proposal \neq None
+\\ \textbf{then}\quad &\textrm{assign } learned := proposal.
+\end{align*}
+
+\end{document}
